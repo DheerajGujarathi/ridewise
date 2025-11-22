@@ -89,8 +89,8 @@ net start | findstr MongoDB
 **Solution 2**: Verify connection string in `.env`
 ```env
 MONGODB_URI=mongodb://localhost:27017/ridewise
-# or
-MONGODB_URI=mongodb+srv://username:password@cluster.mongodb.net/ridewise
+# or for MongoDB Atlas (replace with your credentials)
+MONGODB_URI=mongodb+srv://<username>:<password>@<cluster>.mongodb.net/<database>
 ```
 
 **Solution 3**: Use synthetic data (doesn't require MongoDB)
