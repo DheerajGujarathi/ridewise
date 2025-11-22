@@ -135,17 +135,157 @@ app.get("/api/fare", (req, res) => {
   const categories = ['bike', 'auto', 'cab'];
   const services = ['obeer', 'radipoo', 'yela'];
   const grouped = {};
+  
   for (const category of categories) {
     // Use intercity rates if distance is above threshold
     const rateSource = isIntercity ? fareRates.intercity[category] : fareRates[category];
     grouped[category] = services.map(service => {
       const rates = rateSource[service];
-      const fare = rates.baseFare + rates.perKm * distInKm;
+      
+      // Add random variations to make pricing realistic and dynamic
+      // Each provider gets a random multiplier between 0.95 and 1.05 (±5%)
+      const randomMultiplier = 0.95 + (Math.random() * 0.10);
+      
+      // Calculate base fare with variation
+      let fare = (rates.baseFare + rates.perKm * distInKm) * randomMultiplier;
+      
+      // Add time-based surge pricing (similar to ML model)
+      const currentHour = new Date().getHours();
+      const isRushHour = [7, 8, 9, 17, 18, 19].includes(currentHour);
+      const isWeekend = [0, 6].includes(new Date().getDay());
+      
+      if (isRushHour) {
+        // Rush hour: 10-20% surge
+        fare *= (1.1 + Math.random() * 0.1);
+      } else if (isWeekend) {
+        // Weekend: slight discount 5-10%
+        fare *= (0.9 + Math.random() * 0.05);
+      }
+      
+      // Add small random noise (±₹5) to make each quote unique
+      fare += (Math.random() * 10) - 5;
+      
+      // Ensure minimum fare
+      fare = Math.max(rates.baseFare, fare);
+      
       return { service, fare: fare.toFixed(1), intercity: isIntercity };
     });
   }
 
   res.json({ estimates: grouped, intercity: isIntercity });
+});
+
+// =========================
+// ML Price Prediction Endpoints
+// =========================
+const ML_SERVICE_URL = process.env.ML_SERVICE_URL || 'http://localhost:5001';
+
+// Check ML service health
+app.get('/api/ml/health', async (req, res) => {
+  try {
+    const response = await axios.get(`${ML_SERVICE_URL}/health`);
+    res.json(response.data);
+  } catch (error) {
+    res.status(503).json({ 
+      error: 'ML service unavailable',
+      message: 'Price prediction service is not running'
+    });
+  }
+});
+
+// Predict fare using ML model
+app.post('/api/ml/predict', async (req, res) => {
+  try {
+    const { distance_km, transport_type, service_provider, hour, day_of_week, duration_mins } = req.body;
+    
+    if (!distance_km || !transport_type || !service_provider) {
+      return res.status(400).json({ error: 'Missing required parameters' });
+    }
+    
+    const response = await axios.post(`${ML_SERVICE_URL}/predict`, {
+      distance_km,
+      transport_type,
+      service_provider,
+      hour,
+      day_of_week,
+      duration_mins
+    });
+    
+    res.json(response.data);
+  } catch (error) {
+    console.error('ML prediction error:', error.message);
+    res.status(500).json({ 
+      error: 'Prediction failed',
+      message: error.response?.data?.error || error.message
+    });
+  }
+});
+
+// Get best time to book recommendation
+app.post('/api/ml/best-time', async (req, res) => {
+  try {
+    const { distance_km, transport_type, service_provider, hours_ahead } = req.body;
+    
+    if (!distance_km) {
+      return res.status(400).json({ error: 'Missing distance_km' });
+    }
+    
+    const response = await axios.post(`${ML_SERVICE_URL}/best-time`, {
+      distance_km,
+      transport_type: transport_type || 'cab',
+      service_provider: service_provider || 'obeer',
+      hours_ahead: hours_ahead || 24
+    });
+    
+    res.json(response.data);
+  } catch (error) {
+    console.error('Best time prediction error:', error.message);
+    res.status(500).json({ 
+      error: 'Best time prediction failed',
+      message: error.response?.data?.error || error.message
+    });
+  }
+});
+
+// Batch predict for all transport types and providers
+app.post('/api/ml/batch-predict', async (req, res) => {
+  try {
+    const { distance_km, transport_types, service_providers, hour, day_of_week } = req.body;
+    
+    if (!distance_km) {
+      return res.status(400).json({ error: 'Missing distance_km' });
+    }
+    
+    const response = await axios.post(`${ML_SERVICE_URL}/batch-predict`, {
+      distance_km,
+      transport_types: transport_types || ['bike', 'auto', 'cab'],
+      service_providers: service_providers || ['obeer', 'radipoo', 'yela'],
+      hour,
+      day_of_week
+    });
+    
+    res.json(response.data);
+  } catch (error) {
+    console.error('Batch prediction error:', error.message);
+    res.status(500).json({ 
+      error: 'Batch prediction failed',
+      message: error.response?.data?.error || error.message
+    });
+  }
+});
+
+// Get model info and metadata
+app.get('/api/ml/model-info', async (req, res) => {
+  try {
+    const response = await axios.get(`${ML_SERVICE_URL}/model-info`);
+    res.json(response.data);
+  } catch (error) {
+    console.error('Model info error:', error.message);
+    res.status(500).json({ 
+      error: 'Could not fetch model info',
+      message: error.response?.data?.error || error.message
+    });
+  }
 });
 
 // History routes (now protected with authentication)

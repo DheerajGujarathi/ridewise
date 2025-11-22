@@ -1,0 +1,41 @@
+# Node.js dependencies
+node_modules
+
+# Python virtual environment
+ml-service/venv/
+ml-service/env/
+ml-service/.venv/
+venv/
+env/
+.venv/
+
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# ML models and data
+ml-service/models/*.pkl
+ml-service/data/*.csv
+
+# Environment variables
+.env
+*.env
+!.env.example
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+logs/
